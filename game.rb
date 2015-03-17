@@ -5,6 +5,35 @@ require 'logger'
 include Gosu
 include Chingu
 
+# TODO: How it's going to work:
+# - Playing field:
+#     Playing field advances downwards. Enemies spawn at the top.
+#     Player units drive 'forwards' (i.e. remain in the same place on the
+#     screen despite the field moving), unless they hit a mountain or
+#     something.
+# - Battle line:
+#     Units can only be placed below the battle line.
+#     Battle line advances when the player messes up (exactly what TBD - maybe
+#     when the an enemy unit reaches the bottom? When the player loses a unit?)
+#     Can be pushed back by the player doing well (killing enemy units?).
+#     Game is over when the battle line reaches the bottom.
+# - Action points:
+#     Player has a set number of action points. Placing units, moving units
+#     etc. use action points.
+#     Gain action points back over time, plus for killing enemy units etc.
+#
+# - Misc ideas:
+#     Want to avoid just being able to place a single unit per enemy, so
+#     want to force:
+#       1. Having to use a single unit to cover multiple enemies (e.g. a
+#       ranged dude that hits multiple targets.
+#       2. Having to use multiple enemies of different types to kill the one
+#       enemy.
+#     
+#     Different 'colours' of enemy, killed by different types of unit?
+#     'Super' units, that the player wants to protect? Could have a
+#     'commander' style unit that the player has to protect?
+
 #---------------------
 # Utility Classes
 #---------------------
@@ -106,7 +135,6 @@ class Play < Chingu::GameState
 
   def left_mouse_up
     # TODO: Check the mouse pos is in the board, or elsewhere
-    # TODO: Have an advancing enemy front line that units can't be put in?
     # TODO: Need to stop adding/moving units while the board is scrolling?
     #       Or allow it and adjust coords accordingly, double scroll etc.
     
@@ -118,7 +146,8 @@ class Play < Chingu::GameState
     logger.info "Left Mouse Released: Down #{down_tile}, Up #{up_tile}"
 
     if up_tile == down_tile
-      if @board.tile_empty?(down_tile)
+      if @board.tile_empty?(down_tile) and not
+          @board.tile_enemy_territory?(down_tile)
         # The tile needs to be empty to place new units on
         logger.info "Add Unit"
         @board.add_unit(down_tile)
@@ -141,6 +170,7 @@ class Board
   NUM_TILES = TOTAL_ROWS * COLUMNS
   PROGRESS_TIME = 5000 # Time between board progression, in ms
   TRANSITION_TIME = 500 # Time taken to move the board, in ms
+  FRONTLINE_START = 15
 
   def initialize
     # Tiles array arranged in rows, from the bottom of the
@@ -165,7 +195,7 @@ class Board
     @tile_width = ($window.width / COLUMNS).round
     @tile_height = ($window.height / VISIBLE_ROWS).round
 
-    @enemy_rows = 1
+    @frontline = FRONTLINE_START
 
     @status = :default
     @progress_time = 0
@@ -214,7 +244,7 @@ class Board
           $window.height - (row + 1) * @tile_height + @draw_offset,
           @tile_width, @tile_height,
           # TODO: Draw this over the top rather than coloring the tiles?
-          row > 10 ? 0xffff5555 : 0xffffffff)
+          row > @frontline ? 0xffff5555 : 0xffffffff)
       end
     end
   end
@@ -281,6 +311,10 @@ class Board
   def tile_empty?(tile_coord)
     get_tile(tile_coord).empty?
   end
+
+  def tile_enemy_territory?(tile_coord)
+      tile_coord.y > @frontline
+  end
 end
 
 class Tile
@@ -306,7 +340,7 @@ class Tile
   end
 
   def empty?
-    @unit == nil
+    @type != :tile_mountain and @unit == nil
   end
 
   def walk_surrounding(walk_pattern, &walker)
