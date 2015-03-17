@@ -29,7 +29,7 @@ include Chingu
 #       ranged dude that hits multiple targets.
 #       2. Having to use multiple enemies of different types to kill the one
 #       enemy.
-#     
+#
 #     Different 'colours' of enemy, killed by different types of unit?
 #     'Super' units, that the player wants to protect? Could have a
 #     'commander' style unit that the player has to protect?
@@ -40,7 +40,7 @@ include Chingu
 
 # Drawing order
 module ZOrder
-  Map, Unit, Effect = *0..2
+  MAP, UNIT, EFFECT = *0..2
 end
 
 # Logging mixin
@@ -58,7 +58,7 @@ end
 
 # Extend Gosu::Image to allow drawing images at a certain size
 class Gosu::Image
-  def draw_size(x, y, z, width, height, color=0xffffffff)
+  def draw_size(x, y, z, width, height, color = 0xffffffff)
     draw(x, y, z, width.fdiv(self.width), height.fdiv(self.height), color)
   end
 end
@@ -80,10 +80,9 @@ class Point
   end
 
   def ==(other)
-    self.x == other.x && self.y == other.y
+    @x == other.x && @y == other.y
   end
 end
-
 
 #--------------------
 # Game Classes
@@ -93,7 +92,7 @@ end
 class Game < Chingu::Window
   def initialize
     super(300, 600)
-    self.input = {:esc => :exit}
+    self.input = { esc: :exit }
 
     # TODO: do we need to preload like this?
     Tile.load_media
@@ -116,9 +115,9 @@ class Play < Chingu::GameState
     @mouse_down_pos = Point.new
 
     self.input = {
-      :left_mouse_button => lambda {
+      left_mouse_button: lambda {
           @mouse_down_pos.set($window.mouse_x, $window.mouse_y) },
-      :released_left_mouse_button => :left_mouse_up }
+      released_left_mouse_button: :left_mouse_up }
   end
 
   def setup
@@ -137,7 +136,7 @@ class Play < Chingu::GameState
     # TODO: Check the mouse pos is in the board, or elsewhere
     # TODO: Need to stop adding/moving units while the board is scrolling?
     #       Or allow it and adjust coords accordingly, double scroll etc.
-    
+
     # Check if this is a drag from one cell to another or a click
     # on a single cell.
     down_tile = @board.mouse_pos_to_tile_coords(@mouse_down_pos)
@@ -146,17 +145,17 @@ class Play < Chingu::GameState
     logger.info "Left Mouse Released: Down #{down_tile}, Up #{up_tile}"
 
     if up_tile == down_tile
-      if @board.tile_empty?(down_tile) and not
-          @board.tile_enemy_territory?(down_tile)
+      if @board.tile_empty?(down_tile) &&
+          !@board.tile_enemy_territory?(down_tile)
         # The tile needs to be empty to place new units on
-        logger.info "Add Unit"
+        logger.info('Add Unit')
         @board.add_unit(down_tile)
       end
     else
-      # TODO: Check for move patterns, blocking tiles etc. 
+      # TODO: Check for move patterns, blocking tiles etc.
       if @board.tile_contains_friendly_unit?(down_tile) &&
-        @board.tile_empty?(up_tile)
-        logger.info "Move Unit"
+         @board.tile_empty?(up_tile)
+        logger.info('Move Unit')
         @board.move_unit(down_tile, up_tile)
       end
     end
@@ -187,7 +186,7 @@ class Board
     #
     # [ (C1, R1), (C2, R1), (C3, R1), (C1, R2) ... etc ... ]
     # TODO: Replace with proper tile generation + enemy placement
-    @tiles = Array.new(NUM_TILES) do |i|
+    @tiles = Array.new(NUM_TILES) do
       Tile.new(self, Tile::TYPES.sample)
     end
     @tiles[NUM_TILES - 1].unit = Tank.new(@tiles[NUM_TILES - 1], :enemy)
@@ -222,7 +221,7 @@ class Board
           tile.unit = nil
         end
 
-        @tiles.each { |tile| tile.unit.run if tile.unit != nil }
+        @tiles.each { |tile| tile.unit.run if !tile.unit.nil? }
       else
         @draw_offset = @transition_time.fdiv(TRANSITION_TIME) * @tile_height
       end
@@ -233,7 +232,7 @@ class Board
       progress
     end
 
-    @tiles.each { |tile| tile.unit.update if tile.unit != nil }
+    @tiles.each { |tile| tile.unit.update if !tile.unit.nil? }
   end
 
   def draw
@@ -251,15 +250,15 @@ class Board
   
   def walk_tiles(tile, pattern, &walker)
     start_index = @tiles.find_index(tile)
-    throw "Invalid tile" if start_index == nil
+    throw 'Invalid tile' if start_index == nil
 
     pattern.each do |coord|
       # Coord specifies the [column, row] offset from the start tile
       # of the tile to walk
       tile_index = start_index + coord[0] + coord[1] * COLUMNS
-  
+
       # Check that the tile is in valid range
-      if tile_index >=0 && tile_index < COLUMNS * VISIBLE_ROWS
+      if tile_index >= 0 && tile_index < COLUMNS * VISIBLE_ROWS
         yield @tiles[tile_index]
       end
     end
@@ -273,7 +272,7 @@ class Board
 
   def mouse_pos_in_board?(mouse_pos)
     # Always true while board takes up whole screen
-    return true
+    true
   end
 
   def mouse_pos_to_tile_coords(mouse_pos)
@@ -305,7 +304,7 @@ class Board
 
   def tile_contains_friendly_unit?(tile_coord)
     unit = get_tile(tile_coord).unit
-    unit != nil && unit.friendly?
+    !unit.nil? && unit.friendly?
   end
 
   def tile_empty?(tile_coord)
@@ -313,7 +312,7 @@ class Board
   end
 
   def tile_enemy_territory?(tile_coord)
-      tile_coord.y > @frontline
+    tile_coord.y > @frontline
   end
 end
 
@@ -324,8 +323,8 @@ class Tile
   attr_accessor :unit
 
   def self.load_media
-    @@images ||= { :tile_ground => Image["Earth.png"],
-                   :tile_mountain => Image["stone_wall.bmp"] }
+    @@images ||= { tile_ground: Image["Earth.png"],
+                   tile_mountain: Image["stone_wall.bmp"] }
   end
 
   def initialize(board, type, unit=nil)
@@ -334,13 +333,13 @@ class Tile
     @unit = unit
   end
 
-  def draw(x, y, width, height, color=0xffffffff)
-    @@images[@type].draw_size(x, y, ZOrder::Map, width, height, color)
-    @unit.draw(x, y, width, height) if @unit != nil
+  def draw(x, y, width, height, color = 0xffffffff)
+    @@images[@type].draw_size(x, y, ZOrder::MAP, width, height, color)
+    @unit.draw(x, y, width, height) if !@unit.nil?
   end
 
   def empty?
-    @type != :tile_mountain and @unit == nil
+    @type != :tile_mountain && @unit.nil?
   end
 
   def walk_surrounding(walk_pattern, &walker)
@@ -363,7 +362,7 @@ class Unit
   end
 
   def draw(x, y, width, height)
-    @image.draw_size(x, y, ZOrder::Unit, width, height)
+    @image.draw_size(x, y, ZOrder::UNIT, width, height)
   end
 
   def friendly?
@@ -390,13 +389,13 @@ end
 
 # TODO: Some of this should be in the base class
 class Tank < Unit
-  Fire_pattern = [[0,1], [0,2], [0,3]]
+  FIRE_PATTERN = [[0, 1], [0, 2], [0, 3]]
 
   def initialize(tile, type)
     super(tile, type)
 
-    @animation = Chingu::Animation.new(:file => "droid_11x15.bmp")
-    @animation.frame_names = { :dead => 0..5, :fire => 6..7, :idle => 8..9  }
+    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
+    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
     @animation[:dead].loop = false
     @animation[:fire].loop = false
     @image = @animation[:idle].first
@@ -409,24 +408,19 @@ class Tank < Unit
 
     # If this unit is dead, unlink it from the board once the
     # death animation is finished
-    if @state == :dead && @animation[@state].last_frame?
-      @tile.unit = nil
-    end
-
-    if @state == :fire && @animation[@state].last_frame?
-      @state = :idle
-    end
+    @tile.unit = nil if @state == :dead && @animation[@state].last_frame?
+    @state = :idle if @state == :fire && @animation[@state].last_frame?
   end
 
   def run
     # Find if there's something we can shoot at
-    @tile.walk_surrounding(Fire_pattern) do |tile|
+    @tile.walk_surrounding(FIRE_PATTERN) do |tile|
       # Can't shoot through mountains
       break if tile.type == :tile_mountain
 
-      if tile.unit != nil && tile.unit.enemy? && !tile.unit.dead?
+      if !tile.unit.nil? && tile.unit.enemy? && !tile.unit.dead?
         @state = :fire
-        tile.unit.damage
+        tile.unit.damage()
         break
       end
     end
@@ -443,4 +437,3 @@ end
 #-------------
 
 Game.new.show
-
