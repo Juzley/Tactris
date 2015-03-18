@@ -84,6 +84,19 @@ class Point
   end
 end
 
+class WeightedRandomSelector
+  def initialize(weights)
+    @array = []
+    weights.each do |item, count|
+      @array += [item] * count
+    end
+  end
+
+  def sample
+    @array.sample
+  end
+end
+
 #--------------------
 # Game Classes
 #--------------------
@@ -91,7 +104,7 @@ end
 # Main Game Window
 class Game < Chingu::Window
   def initialize
-    super(300, 600)
+    super(600, 600)
     self.input = { esc: :exit }
 
     # TODO: do we need to preload like this?
@@ -163,7 +176,7 @@ class Play < Chingu::GameState
 end
 
 class Board
-  COLUMNS = 10
+  COLUMNS = 20
   VISIBLE_ROWS = 20
   TOTAL_ROWS = VISIBLE_ROWS + 1
   NUM_TILES = TOTAL_ROWS * COLUMNS
@@ -186,8 +199,10 @@ class Board
     #
     # [ (C1, R1), (C2, R1), (C3, R1), (C1, R2) ... etc ... ]
     # TODO: Replace with proper tile generation + enemy placement
+    @tilegen = WeightedRandomSelector.new({ tile_ground: 95,
+                                            tile_mountain: 5 })
     @tiles = Array.new(NUM_TILES) do
-      Tile.new(self, Tile::TYPES.sample)
+      Tile.new(self, @tilegen.sample)
     end
     @tiles[NUM_TILES - 1].unit = Tank.new(@tiles[NUM_TILES - 1], :enemy)
 
@@ -217,7 +232,7 @@ class Board
 
         # TODO: recycle bottom tiles, unlink old units
         @tiles[-COLUMNS, COLUMNS].each do |tile|
-          tile.type = Tile::TYPES.sample
+          tile.type = @tilegen.sample
           tile.unit = nil
         end
 
@@ -317,6 +332,7 @@ class Board
 end
 
 class Tile
+  # TODO: Water, oil?
   TYPES = [:tile_ground, :tile_mountain]
 
   attr_accessor :type
