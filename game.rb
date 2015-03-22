@@ -22,6 +22,12 @@ include Chingu
 #     etc. use action points.
 #     Gain action points back over time, plus for killing enemy units etc.
 #
+# - Unit types:
+#   Tank
+#   Artillery
+#   Bomber
+#   Anti Air
+#
 # - Misc ideas:
 #     Want to avoid just being able to place a single unit per enemy, so
 #     want to force:
@@ -181,7 +187,7 @@ class Board
   TOTAL_ROWS = VISIBLE_ROWS + 1
   NUM_TILES = TOTAL_ROWS * COLUMNS
   PROGRESS_TIME = 5000 # Time between board progression, in ms
-  TRANSITION_TIME = 500 # Time taken to move the board, in ms
+  TRANSITION_TIME = 0 # Time taken to move the board, in ms
   FRONTLINE_START = 15
 
   def initialize
@@ -217,6 +223,14 @@ class Board
     @draw_offset = 0
   end
 
+  def tile_index_to_coords(index)
+    Point.new(index % COLUMNS, (index / COLUMNS).floor)
+  end
+
+  def tile_coords_to_index(coords)
+    coords.x  + COLUMNS * coords.y
+  end
+
   def update
     case @status
     when :scroll
@@ -236,7 +250,13 @@ class Board
           tile.unit = nil
         end
 
-        @tiles.each { |tile| tile.unit.run if !tile.unit.nil? }
+        # Friendly units run first.
+        @tiles.each do |tile|
+          tile.unit.run if !tile.unit.nil? && tile.unit.friendly?
+        end
+        @tiles.each do |tile|
+          tile.unit.run if !tile.unit.nil? && tile.unit.enemy?
+        end
       else
         @draw_offset = @transition_time.fdiv(TRANSITION_TIME) * @tile_height
       end
@@ -263,14 +283,25 @@ class Board
     end
   end
   
-  def walk_tiles(tile, pattern, &walker)
+  def walk_tiles(tile, pattern, orientation = :up, &walker)
     start_index = @tiles.find_index(tile)
     throw 'Invalid tile' if start_index == nil
 
     pattern.each do |coord|
       # Coord specifies the [column, row] offset from the start tile
       # of the tile to walk
-      tile_index = start_index + coord[0] + coord[1] * COLUMNS
+      # Need first to transform this by the orientation - patterns are
+      # specified assuming an 'up' orientation
+      tc = coord
+      case orientation
+      when :down
+        tc[0] *= -1
+      when :right
+        tc = [tc[1], tc[0]]
+      when :left
+        tc = [tc[1] * -1, tc[0]]
+      end
+      tile_index = start_index + tc[0] + COLUMNS * tc[1]
 
       # Check that the tile is in valid range
       if tile_index >= 0 && tile_index < COLUMNS * VISIBLE_ROWS
@@ -283,6 +314,22 @@ class Board
     @progress_time = 0
     @transition_time = 0
     @status = :scroll
+
+    # Move units up the board (they stay at the same position on the screen)
+    (@tiles.length - 1).downto(0) do |i|
+      tile = @tiles[i]
+      tile_coords = tile_index_to_coords(i)
+      next_coords = Point.new(tile_coords.x, tile_coords.y + 1)
+      next_tile = get_tile(next_coords)
+
+      if !tile.unit.nil? && tile.unit.friendly? && next_tile.empty?
+        puts "Moving unit from #{tile_coords} to #{next_coords}"
+
+        next_tile.unit = tile.unit
+        next_tile.unit.tile = next_tile
+        tile.unit = nil
+      end
+    end
   end
 
   def mouse_pos_in_board?(mouse_pos)
@@ -358,8 +405,8 @@ class Tile
     @type != :tile_mountain && @unit.nil?
   end
 
-  def walk_surrounding(walk_pattern, &walker)
-    @board.walk_tiles(self, walk_pattern, &walker)
+  def walk_surrounding(walk_pattern, orientation = :up, &walker)
+    @board.walk_tiles(self, walk_pattern, orientation, &walker)
   end
 end
 
@@ -419,6 +466,15 @@ class Tank < Unit
     @state = :idle
   end
 
+  def to_s
+    if enemy?
+      type_str = 'Enemy'
+    else
+      type_str = 'Friendly'
+    end
+    type_str + " Tank"
+  end
+
   def update
     @image = @animation[@state].next
 
@@ -430,13 +486,16 @@ class Tank < Unit
 
   def run
     # Find if there's something we can shoot at
-    @tile.walk_surrounding(FIRE_PATTERN) do |tile|
+    orientation = if enemy? then :down else :up end
+    @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
       # Can't shoot through mountains
       break if tile.type == :tile_mountain
 
-      if !tile.unit.nil? && tile.unit.enemy? && !tile.unit.dead?
+      if !tile.unit.nil? && (tile.unit.enemy? != enemy?) && !tile.unit.dead?
         @state = :fire
         tile.unit.damage()
+
+        # Can only fire at one thing per 'turn'
         break
       end
     end
