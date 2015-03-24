@@ -23,9 +23,10 @@ include Chingu
 #     Gain action points back over time, plus for killing enemy units etc.
 #
 # - Unit types:
+#   Infantry
 #   Tank
 #   Artillery
-#   Bomber
+#   Bomber (enemy only)
 #   Anti Air
 #
 # - Misc ideas:
@@ -173,7 +174,7 @@ class Play < Chingu::GameState
     else
       # TODO: Check for move patterns, blocking tiles etc.
       if @board.tile_contains_friendly_unit?(down_tile) &&
-         @board.tile_empty?(up_tile)
+         @board.tile_ground_empty?(up_tile)
         logger.info('Move Unit')
         @board.move_unit(down_tile, up_tile)
       end
@@ -210,7 +211,7 @@ class Board
     @tiles = Array.new(NUM_TILES) do
       Tile.new(self, @tilegen.sample)
     end
-    @tiles[NUM_TILES - 1].unit = Tank.new(@tiles[NUM_TILES - 1], :enemy)
+    @tiles[NUM_TILES - 1].ground_unit = Tank.new(@tiles[NUM_TILES - 1], :enemy)
 
     @tile_width = ($window.width / COLUMNS).round
     @tile_height = ($window.height / VISIBLE_ROWS).round
@@ -247,15 +248,16 @@ class Board
         # TODO: recycle bottom tiles, unlink old units
         @tiles[-COLUMNS, COLUMNS].each do |tile|
           tile.type = @tilegen.sample
-          tile.unit = nil
+          tile.ground_unit = nil
+          tile.air_unit = nil
         end
 
         # Friendly units run first.
         @tiles.each do |tile|
-          tile.unit.run if !tile.unit.nil? && tile.unit.friendly?
+          tile.each_unit { |unit| unit.run if unit.friendly? }
         end
         @tiles.each do |tile|
-          tile.unit.run if !tile.unit.nil? && tile.unit.enemy?
+          tile.each_unit { |unit| unit.run if unit.enemy? }
         end
       else
         @draw_offset = @transition_time.fdiv(TRANSITION_TIME) * @tile_height
@@ -267,7 +269,7 @@ class Board
       progress
     end
 
-    @tiles.each { |tile| tile.unit.update if !tile.unit.nil? }
+    @tiles.each { |tile| tile.each_unit { |unit| unit.update } }
   end
 
   def draw
@@ -315,19 +317,21 @@ class Board
     @transition_time = 0
     @status = :scroll
 
-    # Move units up the board (they stay at the same position on the screen)
+    # Move ground units up the board (they stay at the same position on the
+    # screen)
     (@tiles.length - 1).downto(0) do |i|
       tile = @tiles[i]
       tile_coords = tile_index_to_coords(i)
       next_coords = Point.new(tile_coords.x, tile_coords.y + 1)
       next_tile = get_tile(next_coords)
 
-      if !tile.unit.nil? && tile.unit.friendly? && next_tile.empty?
+      if !tile.ground_unit.nil? && tile.ground_unit.friendly? &&
+        next_tile.ground_empty?
         puts "Moving unit from #{tile_coords} to #{next_coords}"
 
-        next_tile.unit = tile.unit
-        next_tile.unit.tile = next_tile
-        tile.unit = nil
+        next_tile.ground_unit = tile.ground_unit
+        next_tile.ground_unit.tile = next_tile
+        tile.ground_unit = nil
       end
     end
   end
@@ -348,7 +352,7 @@ class Board
 
   def add_unit(tile_coord)
     tile = get_tile(tile_coord)
-    tile.unit = Tank.new(tile, :friendly)
+    tile.ground_unit = Tank.new(tile, :friendly)
     progress
   end
 
@@ -356,17 +360,25 @@ class Board
     from_tile = get_tile(from_coord)
     to_tile = get_tile(to_coord)
 
-    to_tile.unit = from_tile.unit
-    from_tile.unit = nil
+    to_tile.gound_unit = from_tile.ground_unit
+    from_tile.ground_unit = nil
 
-    to_tile.unit.tile = to_tile
+    to_tile.ground_unit.tile = to_tile
 
     progress
   end
 
   def tile_contains_friendly_unit?(tile_coord)
-    unit = get_tile(tile_coord).unit
+    unit = get_tile(tile_coord).ground_unit
     !unit.nil? && unit.friendly?
+  end
+
+  def tile_ground_empty?(tile_coord)
+    get_tile(tile_coord).ground_empty?
+  end
+
+  def tile_air_empty?(tile_coord)
+    get_tile(tile_coord).air_empty?
   end
 
   def tile_empty?(tile_coord)
@@ -383,26 +395,42 @@ class Tile
   TYPES = [:tile_ground, :tile_mountain]
 
   attr_accessor :type
-  attr_accessor :unit
+  attr_accessor :ground_unit
+  attr_accessor :air_unit
 
   def self.load_media
     @@images ||= { tile_ground: Image["Earth.png"],
                    tile_mountain: Image["stone_wall.bmp"] }
   end
 
-  def initialize(board, type, unit=nil)
+  def initialize(board, type, ground_unit=nil, air_unit=nil)
     @board = board
     @type = type
-    @unit = unit
+    @ground_unit = ground_unit
+    @air_unit = air_unit
   end
 
   def draw(x, y, width, height, color = 0xffffffff)
     @@images[@type].draw_size(x, y, ZOrder::MAP, width, height, color)
-    @unit.draw(x, y, width, height) if !@unit.nil?
+
+    self.each_unit { |unit| unit.draw(x, y, width, height) }
+  end
+
+  def ground_empty?
+    @type != :tile_mountain && @ground_unit.nil?
+  end
+
+  def air_empty?
+    @air_unit.nil?
   end
 
   def empty?
-    @type != :tile_mountain && @unit.nil?
+    ground_empty? && air_empty?
+  end
+
+  def each_unit
+    yield @ground_unit if !@ground_unit.nil?
+    yield @air_unit if !@air_unit.nil?
   end
 
   def walk_surrounding(walk_pattern, orientation = :up, &walker)
@@ -436,23 +464,66 @@ class Unit
     @type == :enemy
   end
 
+  def ground_unit?
+    true
+  end
+
+  def air_unit?
+    !ground_unit?
+  end
+
+  def hits_ground?
+    true
+  end
+
+  def hits_air?
+    false
+  end
+
   def dead?
     @state == :dead
   end
 
   def update
+    @image = @animation[@state].next
+
+    # If this unit is dead, unlink it from the board once the
+    # death animation is finished
+    if @state == :dead && @animation[@state].last_frame?
+      @tile.ground_unit = nil if self.ground_unit?
+      @tile.air_unit = nil if self.air_unit?
+    end
+    @state = :idle if @state == :fire && @animation[@state].last_frame?
+  end
+
+  def viable_target(unit)
+    if unit.nil? || unit.dead?
+      false
+    elsif unit.enemy? == self.enemy?
+      false
+    elsif unit.ground_unit? && !self.hits_ground?
+      false
+    elsif unit.air_unit? && !self.hits_air
+      false
+    else
+      true
+    end
   end
 
   def run
   end
 
   def damage
+    @state = :dead
+  end
+
+  def to_s
+    if enemy? then 'Enemy ' else 'Friendly ' end + self.class.to_s
   end
 end
 
-# TODO: Some of this should be in the base class
 class Tank < Unit
-  FIRE_PATTERN = [[0, 1], [0, 2], [0, 3]]
+  FIRE_PATTERN = [[-1, 1], [0, 1], [1, 1]]
 
   def initialize(tile, type)
     super(tile, type)
@@ -462,47 +533,73 @@ class Tank < Unit
     @animation[:dead].loop = false
     @animation[:fire].loop = false
     @image = @animation[:idle].first
-
-    @state = :idle
-  end
-
-  def to_s
-    if enemy?
-      type_str = 'Enemy'
-    else
-      type_str = 'Friendly'
-    end
-    type_str + " Tank"
-  end
-
-  def update
-    @image = @animation[@state].next
-
-    # If this unit is dead, unlink it from the board once the
-    # death animation is finished
-    @tile.unit = nil if @state == :dead && @animation[@state].last_frame?
-    @state = :idle if @state == :fire && @animation[@state].last_frame?
   end
 
   def run
-    # Find if there's something we can shoot at
     orientation = if enemy? then :down else :up end
     @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
-      # Can't shoot through mountains
-      break if tile.type == :tile_mountain
-
-      if !tile.unit.nil? && (tile.unit.enemy? != enemy?) && !tile.unit.dead?
-        @state = :fire
-        tile.unit.damage()
-
-        # Can only fire at one thing per 'turn'
-        break
+      tile.each_unit do |unit|
+        if viable_target(unit)
+          @state = :fire
+          unit.damage()
+          break 2
+        end
       end
     end
   end
+end
 
-  def damage
-    @state = :dead
+class Artillery < Unit
+  FIRE_PATTERN = [[0, 2], [0, 3]]
+
+  def initialize(tile, type)
+    super(tile, type)
+
+    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
+    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
+    @animation[:dead].loop = false
+    @animation[:fire].loop = false
+    @image = @animation[:idle].first
+  end
+
+  def run
+    orientation = if enemy? then :down else :up end
+    @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
+      tile.each_unit do |unit|
+        if viable_target(unit)
+          @state = :fire
+          unit.damage()
+          break 2
+        end
+      end
+    end
+  end
+end
+
+class Bomber < Unit
+  def ground_unit?
+    false
+  end
+
+  def initialize(tile, type)
+    super(tile, type)
+
+    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
+    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
+    @animation[:dead].loop = false
+    @animation[:fire].loop = false
+    @image = @animation[:idle].first
+  end
+
+  def run
+    orientation = if enemy? then :down else :up end
+    @tile.each_unit do |unit|
+      if viable_target(unit)
+        @state = :fire
+        unit.damage()
+        break 2
+      end
+    end
   end
 end
 
