@@ -562,6 +562,10 @@ class Artillery < Unit
     @image = @animation[:idle].first
   end
 
+  def draw
+    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0xff0000ff)
+  end
+
   def run
     orientation = if enemy? then :down else :up end
     @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
@@ -589,6 +593,10 @@ class Bomber < Unit
     @animation[:dead].loop = false
     @animation[:fire].loop = false
     @image = @animation[:idle].first
+  end
+
+  def draw
+    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0x00ff00ff)
   end
 
   def run
