@@ -1,3 +1,5 @@
+require_relative 'util.rb'
+
 class Unit
   attr_accessor :tile
 

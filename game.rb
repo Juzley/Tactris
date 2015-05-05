@@ -1,7 +1,7 @@
 require 'rubygems'
 require 'chingu'
-require 'logger'
 require_relative 'unit.rb'
+require_relative 'util.rb'
 
 include Gosu
 include Chingu
@@ -42,68 +42,6 @@ include Chingu
 #     'Super' units, that the player wants to protect? Could have a
 #     'commander' style unit that the player has to protect?
 
-#---------------------
-# Utility Classes
-#---------------------
-
-# Drawing order
-module ZOrder
-  MAP, UNIT, EFFECT = *0..2
-end
-
-# Logging mixin
-module Logging
-  # This is the magical bit that gets mixed into your classes
-  def logger
-    Logging.logger
-  end
-
-  # Global, memoized, lazy initialized instance of a logger
-  def self.logger
-    @logger ||= Logger.new(STDOUT)
-  end
-end
-
-# Extend Gosu::Image to allow drawing images at a certain size
-class Gosu::Image
-  def draw_size(x, y, z, width, height, color = 0xffffffff)
-    draw(x, y, z, width.fdiv(self.width), height.fdiv(self.height), color)
-  end
-end
-
-# A 2D point
-class Point
-  attr_accessor :x, :y
-
-  def initialize(x = 0, y = 0)
-    set(x, y)
-  end
-
-  def set(x = 0, y = 0)
-    @x, @y = x, y
-  end
-
-  def to_s
-    "Point(#{x}, #{y})"
-  end
-
-  def ==(other)
-    @x == other.x && @y == other.y
-  end
-end
-
-class WeightedRandomSelector
-  def initialize(weights)
-    @array = []
-    weights.each do |item, count|
-      @array += [item] * count
-    end
-  end
-
-  def sample
-    @array.sample
-  end
-end
 
 #--------------------
 # Game Classes
@@ -209,6 +147,10 @@ class Board
     # TODO: Replace with proper tile generation + enemy placement
     @tilegen = WeightedRandomSelector.new({ tile_ground: 95,
                                             tile_mountain: 5 })
+    @enemygen = WeightedRandomSelector.new({ Tank: 40,
+                                             Artillery: 40,
+                                             Bomber: 20 })
+
     @tiles = Array.new(NUM_TILES) do
       Tile.new(self, @tilegen.sample)
     end
@@ -234,6 +176,20 @@ class Board
     coords.x  + COLUMNS * coords.y
   end
 
+  def populate_next_row
+    @tiles[-COLUMNS, COLUMNS].each do |tile|
+      tile.type = @tilegen.sample
+      tile.ground_unit = nil
+      tile.air_unit = nil
+    end
+
+    ground_count = @tiles[-COLUMNS, COLUMNS].count do |tile|
+      tile.type == :tile_ground
+    end
+
+    # TODO: Place units
+  end
+
   def update
     case @status
     when :scroll
@@ -247,12 +203,7 @@ class Board
         @draw_offset = 0
         @tiles.rotate!(COLUMNS)
 
-        # TODO: recycle bottom tiles, unlink old units
-        @tiles[-COLUMNS, COLUMNS].each do |tile|
-          tile.type = @tilegen.sample
-          tile.ground_unit = nil
-          tile.air_unit = nil
-        end
+        populate_next_row
 
         # Friendly units run first.
         @tiles.each do |tile|
