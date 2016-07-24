@@ -122,6 +122,7 @@ class Play < Chingu::GameState
 end
 
 class Board
+  BOARD_HEIGHT = 560
   COLUMNS = 20
   VISIBLE_ROWS = 20
   TOTAL_ROWS = VISIBLE_ROWS + 1
@@ -158,7 +159,7 @@ class Board
       Tank.new(@tiles[NUM_TILES - 1], :enemy)
 
     @tile_width = ($window.width / COLUMNS).round
-    @tile_height = ($window.height / VISIBLE_ROWS).round
+    @tile_height = (BOARD_HEIGHT / VISIBLE_ROWS).round
 
     @frontline = FRONTLINE_START
 
@@ -230,7 +231,7 @@ class Board
       0.upto(COLUMNS - 1) do |col|
         @tiles[row * COLUMNS + col].draw(
           col * @tile_width,
-          $window.height - (row + 1) * @tile_height + @draw_offset,
+          BOARD_HEIGHT - (row + 1) * @tile_height + @draw_offset,
           @tile_width, @tile_height,
           # TODO: Draw this over the top rather than coloring the tiles?
           row > @frontline ? 0xffff5555 : 0xffffffff)
