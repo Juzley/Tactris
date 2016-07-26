@@ -2,6 +2,7 @@ require_relative 'util.rb'
 
 class Unit
   attr_accessor :tile
+  attr_reader :fire_pattern, :move_pattern
   attr_reader :place_ap, :move_ap
 
   def initialize(tile, type)
@@ -10,6 +11,13 @@ class Unit
     @place_ap = 0
     @move_ap = 0
     @state = :idle
+
+    # TODO: Each unit will have separate media eventually
+    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
+    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
+    @animation[:dead].loop = false
+    @animation[:fire].loop = false
+    @image = @animation[:idle].first
   end
 
   def draw(x, y, width, height)
@@ -71,6 +79,16 @@ class Unit
   end
 
   def run
+    orientation = if enemy? then :down else :up end
+    @tile.walk_surrounding(fire_pattern, orientation) do |tile|
+      tile.each_unit do |unit|
+        if viable_target(unit)
+          @state = :fire
+          unit.damage()
+          break 2
+        end
+      end
+    end
   end
 
   def damage
@@ -82,91 +100,50 @@ class Unit
   end
 end
 
-class Tank < Unit
-  FIRE_PATTERN = [[-1, 1], [0, 1], [1, 1]]
-
+class Infantry < Unit
   def initialize(tile, type)
     super(tile, type)
+    @fire_pattern = [[0, 1]]
+    @move_pattern = [[0, 1,], [1, 0], [0, -1], [-1, 0]]
+  end
+end
 
-    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
-    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
-    @animation[:dead].loop = false
-    @animation[:fire].loop = false
-    @image = @animation[:idle].first
+class Tank < Unit
+  def initialize(tile, type)
+    super(tile, type)
+    @fire_pattern = [[-1, 1], [0, 1], [1, 1]]
+    @move_pattern = [[0, 1], [0, 2]]
   end
 
-  def run
-    orientation = if enemy? then :down else :up end
-    @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
-      tile.each_unit do |unit|
-        if viable_target(unit)
-          @state = :fire
-          unit.damage()
-          break 2
-        end
-      end
-    end
+  def draw(x, y, width, height)
+    @image.draw_size(x, y, ZOrder::UNIT, width, height, color=0xffff0000)
   end
 end
 
 class Artillery < Unit
-  FIRE_PATTERN = [[0, 2], [0, 3]]
-
   def initialize(tile, type)
     super(tile, type)
-
-    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
-    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
-    @animation[:dead].loop = false
-    @animation[:fire].loop = false
-    @image = @animation[:idle].first
+    @fire_pattern = [[0, 2], [0, 3]]
+    @move_pattern = [[0, 1], [1, 0], [-1, 0]]
   end
 
-  def draw
-    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0xff0000ff)
-  end
-
-  def run
-    orientation = if enemy? then :down else :up end
-    @tile.walk_surrounding(FIRE_PATTERN, orientation) do |tile|
-      tile.each_unit do |unit|
-        if viable_target(unit)
-          @state = :fire
-          unit.damage()
-          break 2
-        end
-      end
-    end
+  def draw(x, y, width, height)
+    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0xff00ff00)
   end
 end
 
 class Bomber < Unit
+  def initialize(tile, type)
+    super(tile, type)
+    @fire_pattern = [[0, 0]]
+    @move_pattern = [[0, 1], [0, 2], [0, 3], [0, 4]]
+  end
+
   def ground_unit?
     false
   end
 
-  def initialize(tile, type)
-    super(tile, type)
-
-    @animation = Chingu::Animation.new(file: "droid_11x15.bmp")
-    @animation.frame_names = { dead: 0..5, fire: 6..7, idle: 8..9  }
-    @animation[:dead].loop = false
-    @animation[:fire].loop = false
-    @image = @animation[:idle].first
-  end
-
-  def draw
-    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0x00ff00ff)
-  end
-
-  def run
-    orientation = if enemy? then :down else :up end
-    @tile.each_unit do |unit|
-      if viable_target(unit)
-        @state = :fire
-        unit.damage()
-        break 2
-      end
-    end
+  def draw(x, y, width, height)
+    @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0xff0000ff)
   end
 end
