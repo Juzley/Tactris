@@ -68,10 +68,17 @@ end
 class Play < Chingu::GameState
   include Logging
 
+  AP_MAX = 100 # The maximum number of action points.
+  AP_REGEN_RATE = 10 # Rate that AP regenerates, per second.
+  AP_REGEN_PERIOD = 1000 # Pause between regenerating AP.
+ 
   def initialize
     super
 
     @mouse_down_pos = Point.new
+
+    @ap = AP_MAX 
+    @ap_regen_time = 0
 
     self.input = {
       left_mouse_button: lambda {
@@ -84,6 +91,16 @@ class Play < Chingu::GameState
   end
 
   def update
+    # Regenerate AP
+    @ap_regen_time += $window.milliseconds_since_last_tick
+    if @ap_regen_time > AP_REGEN_PERIOD
+      @ap += AP_REGEN_RATE * (1000 / AP_REGEN_PERIOD)
+      @ap = [@ap, AP_MAX].min
+
+      @ap_regen_time -= AP_REGEN_PERIOD
+    end
+
+    # Update the board
     @board.update
   end
 
@@ -112,10 +129,13 @@ class Play < Chingu::GameState
       end
     else
       # TODO: Check for move patterns, blocking tiles etc.
-      if @board.tile_contains_friendly_unit?(down_tile) &&
-         @board.tile_ground_empty?(up_tile)
+      move_unit = @board.get_friendly_unit(down_tile)
+      if @ap > move_unit.move_ap &&
+         @board.move_legal?(move_unit, up_tile)
+        # The move is legal.
         logger.info('Move Unit')
-        @board.move_unit(down_tile, up_tile)
+        @board.move_unit(move_unit, up_tile)
+        @ap - move_unit.move_ap
       end
     end
   end
@@ -307,19 +327,41 @@ class Board
   def add_unit(tile_coord)
     tile = get_tile(tile_coord)
     tile.ground_unit = Tank.new(tile, :friendly)
-    progress
   end
 
-  def move_unit(from_coord, to_coord)
-    from_tile = get_tile(from_coord)
+  def move_legal?(unit, to_coord)
+    # TODO: unit move patterns etc
+    return false if unit.ground_unit? && !tile_ground_empty?(to_coord)
+    return false if unit.air_unit? && !tile_air_empty?(to_coord)
+    return true
+  end
+
+  def move_unit(unit, to_coord)
+    from_tile = unit.tile
     to_tile = get_tile(to_coord)
 
-    to_tile.gound_unit = from_tile.ground_unit
-    from_tile.ground_unit = nil
+    if unit.air_unit?
+      from_tile.air_unit = nil
+      to_tile.air_unit = unit
+    else
+      from_tile.ground_unit = nil
+      to_tile.ground_unit = unit
+    end
+    
+    unit.tile = to_tile
+  end
 
-    to_tile.ground_unit.tile = to_tile
+  def get_friendly_unit(tile_coord)
+    unit = get_tile(tile_coord).air_unit
+    if unit.nil? || !unit.friendly?
+      unit = get_tile(tile_coord).ground_unit
+    end
 
-    progress
+    if !unit.nil? && !unit.friendly?
+      unit = nil
+    end
+
+    unit
   end
 
   def tile_contains_friendly_unit?(tile_coord)
@@ -343,6 +385,7 @@ class Board
     tile_coord.y > @frontline
   end
 end
+
 
 class Tile
   # TODO: Water, oil?

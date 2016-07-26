@@ -2,10 +2,13 @@ require_relative 'util.rb'
 
 class Unit
   attr_accessor :tile
+  attr_reader :place_ap, :move_ap
 
   def initialize(tile, type)
     @type = type
     @tile = tile
+    @place_ap = 0
+    @move_ap = 0
     @state = :idle
   end
 
