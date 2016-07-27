@@ -5,7 +5,7 @@ class Unit
   attr_reader :fire_pattern, :move_pattern
   attr_reader :place_ap, :move_ap
 
-  def initialize(tile, type)
+  def initialize(type, tile=nil)
     @type = type
     @tile = tile
     @place_ap = 0
@@ -32,12 +32,20 @@ class Unit
     @type == :enemy
   end
 
-  def ground_unit?
+  def self.ground_unit?
     true
   end
 
+  def self.air_unit?
+    return !self.ground_unit?
+  end
+
+  def ground_unit?
+    return self.class.ground_unit?
+  end
+
   def air_unit?
-    !ground_unit?
+    return self.class.air_unit?
   end
 
   def hits_ground?
@@ -101,18 +109,22 @@ class Unit
 end
 
 class Infantry < Unit
-  def initialize(tile, type)
+  def initialize(type, tile=nil)
     super(tile, type)
     @fire_pattern = [[0, 1]]
     @move_pattern = [[0, 1,], [1, 0], [0, -1], [-1, 0]]
+    @place_ap = 10
+    @move_ap = 10
   end
 end
 
 class Tank < Unit
-  def initialize(tile, type)
+  def initialize(type, tile=nil)
     super(tile, type)
     @fire_pattern = [[-1, 1], [0, 1], [1, 1]]
     @move_pattern = [[0, 1], [0, 2]]
+    @place_ap = 20
+    @move_ap = 20
   end
 
   def draw(x, y, width, height)
@@ -121,10 +133,12 @@ class Tank < Unit
 end
 
 class Artillery < Unit
-  def initialize(tile, type)
+  def initialize(type, tile=nil)
     super(tile, type)
     @fire_pattern = [[0, 2], [0, 3]]
     @move_pattern = [[0, 1], [1, 0], [-1, 0]]
+    @place_ap = 20
+    @move_ap = 40
   end
 
   def draw(x, y, width, height)
@@ -133,7 +147,7 @@ class Artillery < Unit
 end
 
 class Bomber < Unit
-  def initialize(tile, type)
+  def initialize(type, tile=nil)
     super(tile, type)
     @fire_pattern = [[0, 0]]
     @move_pattern = [[0, 1], [0, 2], [0, 3], [0, 4]]

@@ -41,6 +41,9 @@ include Chingu
 #     Different 'colours' of enemy, killed by different types of unit?
 #     'Super' units, that the player wants to protect? Could have a
 #     'commander' style unit that the player has to protect?
+#
+#     Pre-define levels rather than having randomly generated? Better control
+#     over difficulty that way.
 
 
 #--------------------
@@ -80,7 +83,12 @@ class Play < Chingu::GameState
     @ap = AP_MAX 
     @ap_regen_time = 0
 
+    @next_unit = Infantry
+
     self.input = {
+      a: lambda {@next_unit = Artillery; puts @next_unit},
+      i: lambda {@next_unit = Infantry; puts @next_unit},
+      t: lambda {@next_unit = Tank; puts @next_unit},
       left_mouse_button: lambda {
           @mouse_down_pos.set($window.mouse_x, $window.mouse_y) },
       released_left_mouse_button: :left_mouse_up }
@@ -124,8 +132,9 @@ class Play < Chingu::GameState
       if @board.tile_empty?(down_tile) &&
           !@board.tile_enemy_territory?(down_tile)
         # The tile needs to be empty to place new units on
+        # TODO: consider air/ground units?
         logger.info('Add Unit')
-        @board.add_unit(down_tile)
+        @board.add_unit(@next_unit.new(:friendly), down_tile)
       end
     else
       # TODO: Check for move patterns, blocking tiles etc.
@@ -168,15 +177,14 @@ class Board
     # TODO: Replace with proper tile generation + enemy placement
     @tilegen = WeightedRandomSelector.new({ tile_ground: 95,
                                             tile_mountain: 5 })
-    @enemygen = WeightedRandomSelector.new({ Tank: 40,
-                                             Artillery: 40,
-                                             Bomber: 20 })
+    @enemygen = WeightedRandomSelector.new({ Infantry: 3,
+                                             Tank: 2,
+                                             Artillery: 2,
+                                             Bomber: 1 })
 
     @tiles = Array.new(NUM_TILES) do
       Tile.new(self, @tilegen.sample)
     end
-    @tiles[NUM_TILES - 1].ground_unit =
-      Tank.new(@tiles[NUM_TILES - 1], :enemy)
 
     @tile_width = ($window.width / COLUMNS).round
     @tile_height = (BOARD_HEIGHT / VISIBLE_ROWS).round
@@ -202,13 +210,18 @@ class Board
       tile.type = @tilegen.sample
       tile.ground_unit = nil
       tile.air_unit = nil
-    end
 
-    ground_count = @tiles[-COLUMNS, COLUMNS].count do |tile|
-      tile.type == :tile_ground
+      if Random.rand(1.0) < 0.05
+        unit_type = Kernel.const_get(@enemygen.sample)
+        if (unit_type.ground_unit? && tile.type == :tile_ground) ||
+           (unit_type.air_unit? && tile.type == :tile_mountain)
+          # If the unit type doesn't match the tile type, just don't spawn it. 
+          unit = unit_type.new(:enemy, tile)
+          tile.ground_unit = unit if unit.ground_unit?
+          tile.air_unit = unit if unit.air_unit?
+        end
+      end
     end
-
-    # TODO: Place units
   end
 
   def update
@@ -324,9 +337,12 @@ class Board
     @tiles[tile_coord.y * COLUMNS + tile_coord.x]
   end
 
-  def add_unit(tile_coord)
+  def add_unit(unit, tile_coord)
     tile = get_tile(tile_coord)
-    tile.ground_unit = Tank.new(tile, :friendly)
+
+    tile.ground_unit = unit if unit.ground_unit?
+    tile.air_unit = unit if unit.air_unit?
+    unit.tile = tile
   end
 
   def move_legal?(unit, to_coord)
