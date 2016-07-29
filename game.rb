@@ -82,6 +82,7 @@ class Play < Chingu::GameState
 
     @ap = AP_MAX 
     @ap_regen_time = 0
+    @ap_text = Text.new(@ap.to_s, :x => 0, :y => 0, :zorder => ZOrder::HUD)
 
     @next_unit = Infantry
 
@@ -114,6 +115,7 @@ class Play < Chingu::GameState
 
   def draw
     @board.draw
+    @ap_text.draw(@ap.to_s)
   end
 
   def left_mouse_up
@@ -130,11 +132,13 @@ class Play < Chingu::GameState
 
     if up_tile == down_tile
       if @board.tile_empty?(down_tile) &&
-          !@board.tile_enemy_territory?(down_tile)
+          !@board.tile_enemy_territory?(down_tile) &&
+          @ap > @next_unit.move_ap
         # The tile needs to be empty to place new units on
         # TODO: consider air/ground units?
         logger.info('Add Unit')
         @board.add_unit(@next_unit.new(:friendly), down_tile)
+        @ap -= @next_unit.move_ap
       end
     else
       # TODO: Check for move patterns, blocking tiles etc.
@@ -156,11 +160,12 @@ class Board
   VISIBLE_ROWS = 20
   TOTAL_ROWS = VISIBLE_ROWS + 1
   NUM_TILES = TOTAL_ROWS * COLUMNS
-  PROGRESS_TIME = 5000 # Time between board progression, in ms
+  PROGRESS_TIME = 5000 # Time between board progress, in ms
   TRANSITION_TIME = 0 # Time taken to move the board, in ms
+  NEW_LEVEL_ROWS = 1000 # Number of rows when creating a new level
   FRONTLINE_START = 15
 
-  def initialize
+  def initialize(level = nil)
     # Tiles array arranged in rows, from the bottom of the
     # screen to the top. Tiles within rows are arranged from
     # left to right.
@@ -182,9 +187,15 @@ class Board
                                              Artillery: 2,
                                              Bomber: 1 })
 
-    @tiles = Array.new(NUM_TILES) do
-      Tile.new(self, @tilegen.sample)
+    # TODO: Load level
+    if level.nil?
+      @rows = NEW_LEVEL_ROWS
+
+      @tiles = Array.new(@rows) do
+        Tile.new(self, @tilegen.sample)
+      end
     end
+    @base_row = 0
 
     @tile_width = ($window.width / COLUMNS).round
     @tile_height = (BOARD_HEIGHT / VISIBLE_ROWS).round
@@ -198,11 +209,13 @@ class Board
   end
 
   def tile_index_to_coords(index)
-    Point.new(index % COLUMNS, (index / COLUMNS).floor)
+    # Convert an index in the tile array to coordinate on screen.
+    Point.new(index % COLUMNS, (index / COLUMNS).floor - @base_row)
   end
 
   def tile_coords_to_index(coords)
-    coords.x  + COLUMNS * coords.y
+    # Convert a coordinate on screen to an index in the tile array.
+    coords.x + COLUMNS * coords.y + @base_row
   end
 
   def populate_next_row
@@ -230,16 +243,17 @@ class Board
       @transition_time += $window.milliseconds_since_last_tick
 
       if @transition_time > TRANSITION_TIME
-        # The transition has finished, swap the bottom row of the board
-        # to the top, ready for re-use next transition
+        # The transition has finished
         @status = :default
         @transition_time = 0
         @draw_offset = 0
-        @tiles.rotate!(COLUMNS)
+        #@tiles.rotate!(COLUMNS)
 
-        populate_next_row
+        @base_row += 1
+        #populate_next_row
 
         # Friendly units run first.
+        # TODO: Only run units on screen?
         @tiles.each do |tile|
           tile.each_unit { |unit| unit.run if unit.friendly? }
         end
@@ -262,7 +276,7 @@ class Board
   def draw
     0.upto(TOTAL_ROWS - 1) do |row|
       0.upto(COLUMNS - 1) do |col|
-        @tiles[row * COLUMNS + col].draw(
+        @tiles[(row + @base_row) * COLUMNS + col].draw(
           col * @tile_width,
           BOARD_HEIGHT - (row + 1) * @tile_height + @draw_offset,
           @tile_width, @tile_height,
@@ -304,8 +318,8 @@ class Board
     @transition_time = 0
     @status = :scroll
 
-    # Move ground units up the board (they stay at the same position on the
-    # screen)
+    # Move friendly ground units up the board (they stay at the same position
+    # on the screen)
     (@tiles.length - 1).downto(0) do |i|
       tile = @tiles[i]
       tile_coords = tile_index_to_coords(i)
@@ -334,7 +348,7 @@ class Board
   end
 
   def get_tile(tile_coord)
-    @tiles[tile_coord.y * COLUMNS + tile_coord.x]
+    @tiles[@base_row + tile_coord.y * COLUMNS + tile_coord.x]
   end
 
   def add_unit(unit, tile_coord)
@@ -398,7 +412,7 @@ class Board
   end
 
   def tile_enemy_territory?(tile_coord)
-    tile_coord.y > @frontline
+    tile_coord.y - @base_row > @frontline
   end
 end
 

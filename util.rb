@@ -2,7 +2,7 @@ require 'logger'
 
 # Drawing order
 module ZOrder
-  MAP, UNIT, EFFECT = *0..2
+  MAP, UNIT, EFFECT, HUD = *0..3
 end
 
 # Logging mixin
@@ -56,5 +56,12 @@ class WeightedRandomSelector
 
   def sample
     @array.sample
+  end
+end
+
+class Text < Chingu::Text
+  def draw(text=nil)
+    @text = text if !text.nil?
+    super()
   end
 end

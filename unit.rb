@@ -2,8 +2,11 @@ require_relative 'util.rb'
 
 class Unit
   attr_accessor :tile
-  attr_reader :fire_pattern, :move_pattern
-  attr_reader :place_ap, :move_ap
+
+  FIRE_PATTERN = []
+  MOVE_PATTERN = []
+  PLACE_AP = 0
+  MOVE_AP = 0
 
   def initialize(type, tile=nil)
     @type = type
@@ -22,6 +25,38 @@ class Unit
 
   def draw(x, y, width, height)
     @image.draw_size(x, y, ZOrder::UNIT, width, height)
+  end
+
+  def self.fire_pattern
+    return self::FIRE_PATTERN
+  end
+
+  def fire_pattern
+    return self.class.fire_pattern
+  end
+
+  def self.move_pattern
+    return self::MOVE_PATTERN
+  end
+
+  def move_pattern
+    return self.class.move_pattern
+  end
+
+  def self.place_ap
+    return self::PLACE_AP
+  end
+
+  def place_ap
+    return self.class.place_ap
+  end
+
+  def self.move_ap
+    return self::MOVE_AP
+  end
+
+  def move_ap
+    return self.class.move_ap
   end
 
   def friendly?
@@ -109,23 +144,17 @@ class Unit
 end
 
 class Infantry < Unit
-  def initialize(type, tile=nil)
-    super(tile, type)
-    @fire_pattern = [[0, 1]]
-    @move_pattern = [[0, 1,], [1, 0], [0, -1], [-1, 0]]
-    @place_ap = 10
-    @move_ap = 10
-  end
+  FIRE_PATTERN = [[0, 1]]
+  MOVE_PATTERN = [[0, 1,], [1, 0], [0, -1], [-1, 0]]
+  PLACE_AP = 10
+  MOVE_AP = 10
 end
 
 class Tank < Unit
-  def initialize(type, tile=nil)
-    super(tile, type)
-    @fire_pattern = [[-1, 1], [0, 1], [1, 1]]
-    @move_pattern = [[0, 1], [0, 2]]
-    @place_ap = 20
-    @move_ap = 20
-  end
+  FIRE_PATTERN = [[-1, 1], [0, 1], [1, 1]]
+  MOVE_PATTERN = [[0, 1], [0, 2]]
+  PLACE_AP = 20
+  MOVE_AP = 20
 
   def draw(x, y, width, height)
     @image.draw_size(x, y, ZOrder::UNIT, width, height, color=0xffff0000)
@@ -133,13 +162,10 @@ class Tank < Unit
 end
 
 class Artillery < Unit
-  def initialize(type, tile=nil)
-    super(tile, type)
-    @fire_pattern = [[0, 2], [0, 3]]
-    @move_pattern = [[0, 1], [1, 0], [-1, 0]]
-    @place_ap = 20
-    @move_ap = 40
-  end
+  FIRE_PATTERN = [[0, 2], [0, 3]]
+  MOVE_PATTERN = [[0, 1], [1, 0], [-1, 0]]
+  PLACE_AP = 20
+  MOVE_AP = 40
 
   def draw(x, y, width, height)
     @image.draw_size(x, y, ZOrder::UNIT, width, height, color = 0xff00ff00)
@@ -147,11 +173,8 @@ class Artillery < Unit
 end
 
 class Bomber < Unit
-  def initialize(type, tile=nil)
-    super(tile, type)
-    @fire_pattern = [[0, 0]]
-    @move_pattern = [[0, 1], [0, 2], [0, 3], [0, 4]]
-  end
+  FIRE_PATTERN = [[0, 0]]
+  MOVE_PATTERN = [[0, 1], [0, 2], [0, 3], [0, 4]]
 
   def ground_unit?
     false
