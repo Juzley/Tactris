@@ -1,7 +1,8 @@
 require 'rubygems'
 require 'chingu'
-require_relative 'unit.rb'
-require_relative 'util.rb'
+require_relative 'unit'
+require_relative 'util'
+require_relative 'edit'
 
 include Gosu
 include Chingu
@@ -90,6 +91,7 @@ class Play < Chingu::GameState
       a: lambda {@next_unit = Artillery; puts @next_unit},
       i: lambda {@next_unit = Infantry; puts @next_unit},
       t: lambda {@next_unit = Tank; puts @next_unit},
+      e: lambda {push_game_state(Edit.new(@board))},
       left_mouse_button: lambda {
           @mouse_down_pos.set($window.mouse_x, $window.mouse_y) },
       released_left_mouse_button: :left_mouse_up }
@@ -164,6 +166,9 @@ class Board
   TRANSITION_TIME = 0 # Time taken to move the board, in ms
   NEW_LEVEL_ROWS = 1000 # Number of rows when creating a new level
   FRONTLINE_START = 15
+
+  attr_accessor :base_row
+  attr_reader :rows
 
   def initialize(level = nil)
     # Tiles array arranged in rows, from the bottom of the
@@ -464,10 +469,3 @@ class Tile
     @board.walk_tiles(self, walk_pattern, orientation, &walker)
   end
 end
-
-
-#-------------
-# Main
-#-------------
-
-Game.new.show
