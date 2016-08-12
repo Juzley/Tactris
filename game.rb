@@ -352,6 +352,10 @@ class Board
               VISIBLE_ROWS - 1 -  (mouse_pos.y.fdiv(@tile_height)).floor)
   end
 
+  def mouse_pos_to_tile(mouse_pos)
+    get_tile(mouse_pos_to_tile_coords(mouse_pos))
+  end
+
   def get_tile(tile_coord)
     @tiles[@base_row + tile_coord.y * COLUMNS + tile_coord.x]
   end

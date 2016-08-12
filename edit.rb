@@ -13,17 +13,29 @@ class Edit < Chingu::GameState
     @board = board
 
     self.input = {
+      e: lambda {pop_game_state},
+      left_mouse_button: lambda {self.edit_tile},
       mouse_wheel_up: lambda {
         if @board.base_row + Board::VISIBLE_ROWS < @board.rows 
           @board.base_row += 1
         end
       }, 
       mouse_wheel_down: lambda {@board.base_row -= 1 if @board.base_row > 0},
-      e: lambda {pop_game_state},
     }
 
     def draw
       @board.draw
+    end
+
+    def edit_tile
+      tile = @board.mouse_pos_to_tile(Point.new($window.mouse_x,
+                                                $window.mouse_y))
+
+      cur_type_idx = Tile::TYPES.index(tile.type)
+      next_type_idx = cur_type_idx + 1
+      next_type_idx = 0 if next_type_idx == Tile::TYPES.length
+
+      tile.type = Tile::TYPES[next_type_idx]
     end
   end
 end
