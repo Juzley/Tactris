@@ -13,7 +13,7 @@ class Edit < Chingu::GameState
     @board = board
 
     self.input = {
-      e: lambda {pop_game_state},
+      e: lambda {pop_game_state(:setup => false)},
       left_mouse_button: lambda {self.edit_tile},
       mouse_wheel_up: lambda {
         if @board.base_row + Board::VISIBLE_ROWS < @board.rows 
