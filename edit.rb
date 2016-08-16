@@ -14,6 +14,7 @@ class Edit < Chingu::GameState
 
     self.input = {
       e: lambda {pop_game_state(:setup => false)},
+      s: lambda {self.save},
       left_mouse_button: lambda {self.edit_tile},
       mouse_wheel_up: lambda {
         if @board.base_row + Board::VISIBLE_ROWS < @board.rows 
@@ -25,6 +26,10 @@ class Edit < Chingu::GameState
 
     def draw
       @board.draw
+    end
+
+    def save
+      File.open('temp.lvl', 'w') {|f| f.write(Marshal.dump(@board))}
     end
 
     def edit_tile

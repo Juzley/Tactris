@@ -170,7 +170,7 @@ class Board
   attr_accessor :base_row
   attr_reader :rows
 
-  def initialize(level = nil)
+  def initialize
     # Tiles array arranged in rows, from the bottom of the
     # screen to the top. Tiles within rows are arranged from
     # left to right.
@@ -192,13 +192,9 @@ class Board
                                              Artillery: 2,
                                              Bomber: 1 })
 
-    # TODO: Load level
-    if level.nil?
-      @rows = NEW_LEVEL_ROWS
-
-      @tiles = Array.new(@rows) do
-        Tile.new(self, @tilegen.sample)
-      end
+    @rows = NEW_LEVEL_ROWS
+    @tiles = Array.new(@rows) do
+      Tile.new(self, @tilegen.sample)
     end
     @base_row = 0
 
@@ -211,6 +207,14 @@ class Board
     @progress_time = 0
     @transition_time = 0
     @draw_offset = 0
+  end
+
+  def marshal_dump
+      @tiles
+  end
+
+  def marshal_load(tiles)
+      @tiles = tiles
   end
 
   def tile_index_to_coords(index)
